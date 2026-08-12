@@ -1,5 +1,6 @@
 import { createClient } from '@libsql/client';
 import { drizzle } from 'drizzle-orm/libsql';
+import { resolveDatabaseConnection } from './connection';
 import * as schema from './schema';
 
 /**
@@ -8,27 +9,8 @@ import * as schema from './schema';
  * changes — same client, same schema, same migrations.
  */
 function createDbClient() {
-  const url = process.env.DATABASE_URL;
-
-  if (!url) {
-    throw new Error(
-      'DATABASE_URL is not set. Locally, copy .env.example to .env.local ("file:./local.db"). On Vercel, add it in Project Settings → Environment Variables.',
-    );
-  }
-
-  const isLocalFile = url.startsWith('file:');
-  const authToken = process.env.DATABASE_AUTH_TOKEN;
-
-  if (!isLocalFile && !authToken) {
-    throw new Error(
-      `DATABASE_URL is remote ("${url.split(':')[0]}:") but DATABASE_AUTH_TOKEN is not set.`,
-    );
-  }
-
-  return createClient({
-    url,
-    authToken: isLocalFile ? undefined : authToken,
-  });
+  const { url, authToken } = resolveDatabaseConnection();
+  return createClient({ url, authToken });
 }
 
 function createDb() {
