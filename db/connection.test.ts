@@ -75,6 +75,37 @@ describe('resolveDatabaseConnection', () => {
     ).toThrow(/no auth token/i);
   });
 
+  /*
+   * The exact shape of a first broken deploy: .env.local copied wholesale into
+   * Vercel, so DATABASE_URL points at a file that cannot exist there.
+   */
+  it('refuses a local file database when running on Vercel', () => {
+    expect(() =>
+      resolveDatabaseConnection({ DATABASE_URL: 'file:./local.db', VERCEL: '1' }),
+    ).toThrow(/no persistent filesystem/i);
+  });
+
+  it('says how to fix it rather than just that it is wrong', () => {
+    expect(() =>
+      resolveDatabaseConnection({ DATABASE_URL: 'file:./local.db', VERCEL: '1' }),
+    ).toThrow(/TURSO_DATABASE_URL/);
+  });
+
+  it('catches a leftover file: URL shadowing a provisioned Turso database', () => {
+    expect(() =>
+      resolveDatabaseConnection({
+        DATABASE_URL: 'file:./local.db',
+        TURSO_DATABASE_URL: 'libsql://funko.turso.io',
+        TURSO_AUTH_TOKEN: 'injected',
+        VERCEL: '1',
+      }),
+    ).toThrow(/local file/i);
+  });
+
+  it('still allows a local file everywhere that is not Vercel', () => {
+    expect(resolveDatabaseConnection({ DATABASE_URL: 'file:./local.db' }).isLocalFile).toBe(true);
+  });
+
   it('ignores an auth token that would be meaningless on a local file', () => {
     const resolved = resolveDatabaseConnection({
       DATABASE_URL: 'file:./local.db',

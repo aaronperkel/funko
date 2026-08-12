@@ -46,6 +46,23 @@ export function resolveDatabaseConnection(
   }
 
   const isLocalFile = url.startsWith('file:');
+
+  /*
+   * A `file:` database on Vercel is always a mistake — the filesystem is
+   * ephemeral and read-only, so it yields an empty database rather than an
+   * error, which is the worst possible failure: the app "works" and shows
+   * nothing. It happens by copying .env.local into the project settings, and
+   * because an explicit DATABASE_URL outranks an injected TURSO_DATABASE_URL,
+   * a leftover file: URL silently wins even after Turso is provisioned.
+   */
+  if (isLocalFile && env.VERCEL) {
+    throw new Error(
+      `${source} is "${url}", a local file, but this is running on Vercel where there is no ` +
+        'persistent filesystem. Remove that variable from your Vercel project settings and use a ' +
+        'Turso database — the Turso integration provides TURSO_DATABASE_URL automatically.',
+    );
+  }
+
   const authToken = env.DATABASE_AUTH_TOKEN ?? env.TURSO_AUTH_TOKEN;
 
   if (!isLocalFile && !authToken) {
