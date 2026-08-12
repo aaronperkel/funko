@@ -2,14 +2,18 @@ import Image from 'next/image';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { isAuthenticated } from '@/lib/auth';
-import { getPopEntry, isPrivateEntry } from '@/lib/queries/collection';
+import { getPopEntry, isPrivateEntry, popValueSeries } from '@/lib/queries/collection';
 import { tierLabel } from '@/lib/condition';
 import { formatCents, formatPercent, formatSignedCents } from '@/lib/money';
 import { formatLiquidity } from '@/lib/valuation';
+import { parseMatchCandidates, parseSnapshotSample } from '@/lib/pricing/refresh';
 import { Nav } from '@/components/nav';
 import { Badge, Panel } from '@/components/ui';
 import { TierComparison } from '@/components/pop/tier-comparison';
 import { InlineEditor } from '@/components/pop/inline-editor';
+import { PopHistoryChart } from '@/components/charts/pop-history-chart';
+import { MatchReview } from '@/components/pricing/match-review';
+import { RefreshPriceButton } from '@/components/pricing/refresh-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,6 +35,13 @@ export default async function PopDetailPage({ params }: Props) {
   const { entry, snapshots } = result;
   const { pop, valuation, gain } = entry;
   const liquidity = formatLiquidity(valuation.salesVolumeYearly);
+
+  const series = popValueSeries(pop, snapshots);
+  // Ordered newest-first by the query, so the first eBay row is the latest one.
+  const ebayLatest = snapshots.find((snapshot) => snapshot.source === 'ebay_active') ?? null;
+
+  const candidates =
+    signedIn && isPrivateEntry(entry) ? parseMatchCandidates(entry.pop.matchCandidates) : [];
 
   return (
     <>
@@ -75,6 +86,16 @@ export default async function PopDetailPage({ params }: Props) {
             {liquidity && (
               <div className={`text-xs ${liquidity.tone === 'warn' ? 'text-warn' : 'text-dim'}`}>
                 {liquidity.label}
+              </div>
+            )}
+            {valuation.capturedAt && (
+              <div className="text-[11px] text-dim">
+                as of {valuation.capturedAt.slice(0, 10)}
+              </div>
+            )}
+            {signedIn && (
+              <div className="mt-2 flex justify-end">
+                <RefreshPriceButton popId={pop.id} />
               </div>
             )}
           </div>
@@ -166,6 +187,36 @@ export default async function PopDetailPage({ params }: Props) {
               />
             </Panel>
 
+            {candidates.length > 0 && (
+              <Panel
+                title="Which one is this?"
+                description="Nothing here prices this figure until you pick one."
+              >
+                <MatchReview
+                  popId={pop.id}
+                  candidates={candidates}
+                  note={isPrivateEntry(entry) ? entry.pop.matchNote : null}
+                />
+              </Panel>
+            )}
+
+            {/*
+              The provider's explanation of why a figure has no price — "no
+              Funko listing found for …", "UPC matched a video game". Shown even
+              when there is nothing to choose between, because knowing what to
+              fix is the whole value of the message.
+            */}
+            {candidates.length === 0 &&
+              isPrivateEntry(entry) &&
+              entry.pop.matchNote &&
+              valuation.unitValueCents === null && (
+                <Panel title="Why this has no price">
+                  <p className="px-4 py-3 text-xs text-muted">{entry.pop.matchNote}</p>
+                </Panel>
+              )}
+
+            {ebayLatest && <EbayAsking snapshot={ebayLatest} />}
+
             {signedIn ? (
               <Panel title="Details" description="Edit inline — changes save immediately.">
                 <InlineEditor pop={pop} />
@@ -194,12 +245,24 @@ export default async function PopDetailPage({ params }: Props) {
                 <div className="px-4 py-8 text-center">
                   <p className="text-sm text-foreground">No snapshots yet</p>
                   <p className="mx-auto mt-1 max-w-md text-xs text-muted">
-                    PriceCharting serves current prices only, so history starts accumulating from
-                    the first refresh. Automatic pricing arrives in phase 4.
+                    PriceCharting serves current prices only, so this history starts from the
+                    first refresh and fills in weekly from there.
                   </p>
                 </div>
               ) : (
-                <SnapshotTable snapshots={snapshots} />
+                <>
+                  {series.length >= 2 && (
+                    <PopHistoryChart
+                      data={series}
+                      costBasisCents={
+                        signedIn && isPrivateEntry(entry) && entry.pop.purchasePriceCents !== null
+                          ? entry.pop.purchasePriceCents * pop.quantity
+                          : null
+                      }
+                    />
+                  )}
+                  <SnapshotTable snapshots={snapshots} />
+                </>
               )}
             </Panel>
 
@@ -212,6 +275,69 @@ export default async function PopDetailPage({ params }: Props) {
         </div>
       </main>
     </>
+  );
+}
+
+/**
+ * eBay's contribution, kept visually and semantically apart from the valuation.
+ *
+ * These are what sellers are *asking* on live listings — not completed sales.
+ * On a slow-moving collectible that runs well above what anything clears at, so
+ * it is labelled as such here, excluded from every total, and never allowed to
+ * be "the value" of anything.
+ */
+function EbayAsking({
+  snapshot,
+}: {
+  snapshot: {
+    capturedAt: string;
+    loosePriceCents: number | null;
+    newPriceCents: number | null;
+    rawJson: string | null;
+  };
+}) {
+  const sample = parseSnapshotSample(snapshot.rawJson);
+  const counts = sample?.listingCounts;
+
+  return (
+    <Panel
+      title="eBay asking prices"
+      description="Live listings, trimmed 10% off each end. Not sales — nobody has paid these."
+    >
+      <div className="flex flex-wrap gap-6 px-4 py-3">
+        <AskingFigure
+          label="Opened / loose"
+          cents={snapshot.loosePriceCents}
+          listings={counts?.loose}
+        />
+        <AskingFigure label="Sealed" cents={snapshot.newPriceCents} listings={counts?.new} />
+        <div className="ml-auto self-end text-[10px] text-dim">
+          checked {snapshot.capturedAt.slice(0, 10)}
+        </div>
+      </div>
+    </Panel>
+  );
+}
+
+function AskingFigure({
+  label,
+  cents,
+  listings,
+}: {
+  label: string;
+  cents: number | null;
+  listings?: number;
+}) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wider text-dim">{label}</div>
+      <div className="tnum mt-0.5 text-lg font-semibold text-warn">{formatCents(cents)}</div>
+      <div className="text-[10px] text-dim">
+        {cents === null
+          ? 'too few listings to average'
+          : `${listings ?? 0} ${listings === 1 ? 'listing' : 'listings'}`}
+      </div>
+    </div>
   );
 }
 

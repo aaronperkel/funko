@@ -56,6 +56,19 @@ export const pops = sqliteTable(
     /** eBay product id, surfaced by PriceCharting; powers the sold-search link. */
     ebayEpid: text('ebay_epid'),
     matchStatus: text('match_status', { enum: MATCH_STATUSES }).notNull().default('unmatched'),
+    /**
+     * JSON array of candidates a text search turned up, persisted so the
+     * review queue in /admin can be worked through without re-querying the
+     * pricing API once per figure. Null whenever nothing is awaiting review.
+     */
+    matchCandidates: text('match_candidates'),
+    /**
+     * The provider's own explanation of the last match attempt — "UPC 0454…
+     * matched Mario Kart 64", "no Funko listing found for …". Persisted because
+     * a generic "needs review" tells you nothing about *what* to fix, and the
+     * provider is the only thing that ever knew.
+     */
+    matchNote: text('match_note'),
     needsDisambiguation: integer('needs_disambiguation', { mode: 'boolean' })
       .notNull()
       .default(false),

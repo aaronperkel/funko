@@ -1,0 +1,1 @@
+ALTER TABLE `pops` ADD `match_candidates` text;

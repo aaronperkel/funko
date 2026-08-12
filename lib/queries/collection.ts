@@ -1,6 +1,7 @@
 import { desc, eq, sql } from 'drizzle-orm';
 import { db } from '@/db';
 import { pops, priceSnapshots, type Pop, type PriceSnapshot } from '@/db/schema';
+import { effectiveTier, priceForTier, type ConditionTier } from '@/lib/condition';
 import { valuePop, type Valuation } from '@/lib/valuation';
 
 /**
@@ -45,6 +46,14 @@ const publicColumns = {
 /** Added only for an authenticated reader. */
 const privateColumns = {
   ...publicColumns,
+  /*
+   * Match plumbing is admin-only. Not because a catalogue id is a secret, but
+   * because the public gallery has no use for it and the smallest payload that
+   * does the job is the one least likely to leak something later.
+   */
+  priceChartingConsole: pops.priceChartingConsole,
+  matchCandidates: pops.matchCandidates,
+  matchNote: pops.matchNote,
   acquiredAs: pops.acquiredAs,
   purchasePriceCents: pops.purchasePriceCents,
   purchaseDate: pops.purchaseDate,
@@ -91,6 +100,9 @@ export type PublicPop = Pick<
 export type PrivatePop = PublicPop &
   Pick<
     Pop,
+    | 'priceChartingConsole'
+    | 'matchCandidates'
+    | 'matchNote'
     | 'acquiredAs'
     | 'purchasePriceCents'
     | 'purchaseDate'
@@ -332,4 +344,121 @@ export async function getValueHistory(): Promise<
 
     return { date, valueCents, pricedCount };
   });
+}
+
+export type Mover = {
+  id: string;
+  name: string;
+  imageUrl: string | null;
+  tier: ConditionTier;
+  previousCents: number;
+  currentCents: number;
+  changeCents: number;
+  changeRatio: number | null;
+  from: string;
+  to: string;
+};
+
+/**
+ * What actually moved between the last two snapshots.
+ *
+ * Compared at each figure's own tier, so a figure whose mint-in-box price
+ * doubled does not show up as a windfall when the one you own is loose.
+ *
+ * Manually-valued figures are excluded: your appraisal overrides the market, so
+ * a market move genuinely does not change what this dashboard says they are
+ * worth, and listing them as movers would be showing a change that isn't there.
+ *
+ * Public-safe — a market price movement is not cost basis.
+ */
+export async function getBiggestMovers(limit = 6): Promise<Mover[]> {
+  const [allPops, snapshots] = await Promise.all([
+    db
+      .select({
+        id: pops.id,
+        name: pops.name,
+        imageUrl: pops.imageUrl,
+        quantity: pops.quantity,
+        condition: pops.condition,
+        hasBox: pops.hasBox,
+        boxCondition: pops.boxCondition,
+        manualValueCents: pops.manualValueCents,
+        status: pops.status,
+      })
+      .from(pops)
+      .where(eq(pops.status, 'owned')),
+    db
+      .select()
+      .from(priceSnapshots)
+      .where(eq(priceSnapshots.source, 'pricecharting'))
+      .orderBy(priceSnapshots.capturedAt),
+  ]);
+
+  const byPop = new Map<string, PriceSnapshot[]>();
+  for (const snapshot of snapshots) {
+    const list = byPop.get(snapshot.popId) ?? [];
+    list.push(snapshot);
+    byPop.set(snapshot.popId, list);
+  }
+
+  const movers: Mover[] = [];
+
+  for (const pop of allPops) {
+    if (pop.manualValueCents !== null) continue;
+
+    const history = byPop.get(pop.id) ?? [];
+    if (history.length < 2) continue;
+
+    const current = history[history.length - 1];
+    const previous = history[history.length - 2];
+
+    const tier = effectiveTier(pop);
+    const currentCents = priceForTier(current, tier);
+    const previousCents = priceForTier(previous, tier);
+
+    // A tier that gained or lost data is not a price movement.
+    if (currentCents === null || previousCents === null) continue;
+
+    const changeCents = (currentCents - previousCents) * pop.quantity;
+    if (changeCents === 0) continue;
+
+    movers.push({
+      id: pop.id,
+      name: pop.name,
+      imageUrl: pop.imageUrl,
+      tier,
+      previousCents: previousCents * pop.quantity,
+      currentCents: currentCents * pop.quantity,
+      changeCents,
+      changeRatio: previousCents > 0 ? (currentCents - previousCents) / previousCents : null,
+      from: previous.capturedAt,
+      to: current.capturedAt,
+    });
+  }
+
+  return movers
+    .sort((a, b) => Math.abs(b.changeCents) - Math.abs(a.changeCents))
+    .slice(0, limit);
+}
+
+/**
+ * One figure's value over time, at its own tier — the series behind the chart
+ * on the detail page.
+ */
+export function popValueSeries(
+  pop: Pick<Pop, 'condition' | 'hasBox' | 'boxCondition' | 'quantity'>,
+  snapshots: readonly PriceSnapshot[],
+): Array<{ date: string; valueCents: number }> {
+  const tier = effectiveTier(pop);
+
+  return snapshots
+    .filter((snapshot) => snapshot.source === 'pricecharting')
+    .slice()
+    .sort((a, b) => a.capturedAt.localeCompare(b.capturedAt))
+    .map((snapshot) => ({ date: snapshot.capturedAt, price: priceForTier(snapshot, tier) }))
+    .filter((point): point is { date: string; price: number } => point.price !== null)
+    .map((point) => ({
+      date: point.date.slice(0, 10),
+      valueCents: point.price * pop.quantity,
+    }));
 }

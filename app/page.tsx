@@ -1,11 +1,14 @@
 import Link from 'next/link';
 import { isAuthenticated } from '@/lib/auth';
 import {
+  getBiggestMovers,
   getCollection,
   getValueHistory,
   isPrivateEntry,
   type CollectionEntry,
+  type Mover,
 } from '@/lib/queries/collection';
+import { tierLabel } from '@/lib/condition';
 import { franchiseBreakdown, portfolioTotals } from '@/lib/valuation';
 import {
   MARKETPLACE_FEE_RATE,
@@ -25,6 +28,7 @@ export default async function OverviewPage() {
   const signedIn = await isAuthenticated();
   const entries = await getCollection({ includePrivate: signedIn });
   const history = await getValueHistory();
+  const movers = await getBiggestMovers();
 
   const owned = entries.filter((entry) => entry.pop.status === 'owned');
   const totals = portfolioTotals(owned);
@@ -96,14 +100,17 @@ export default async function OverviewPage() {
         </div>
 
         <div className="mt-3 grid gap-3 lg:grid-cols-2">
-          <Panel title="Biggest movers" description="Change since the previous snapshot.">
-            {history.length >= 2 ? (
-              <p className="px-4 py-8 text-center text-sm text-muted">
-                No movement recorded between the last two snapshots.
-              </p>
+          <Panel
+            title="Biggest movers"
+            description="Change since the previous snapshot, at each figure's own tier."
+          >
+            {movers.length > 0 ? (
+              <MoversList movers={movers} />
             ) : (
               <p className="px-4 py-8 text-center text-sm text-muted">
-                Needs at least two price snapshots to compare.
+                {history.length >= 2
+                  ? 'No figure changed price between the last two snapshots.'
+                  : 'Needs at least two price snapshots to compare.'}
               </p>
             )}
           </Panel>
@@ -188,6 +195,47 @@ function CollectingData({ points }: { points: number }) {
         {points === 0 ? 'No snapshots recorded yet.' : '1 snapshot so far — 2 needed to draw a line.'}
       </p>
     </div>
+  );
+}
+
+/**
+ * Movement is compared at each figure's own tier, so a mint-in-box price spike
+ * does not show up as a gain on the loose one sitting on the shelf. The sign is
+ * explicit on every row — colour is the redundant channel here, never the only
+ * one carrying the meaning.
+ */
+function MoversList({ movers }: { movers: Mover[] }) {
+  return (
+    <ul className="divide-y divide-border">
+      {movers.map((mover) => (
+        <li key={mover.id} className="flex items-center justify-between gap-3 px-4 py-2">
+          <div className="min-w-0">
+            <Link
+              href={`/pop/${mover.id}`}
+              className="block truncate text-xs font-medium text-foreground hover:text-accent"
+            >
+              {mover.name}
+            </Link>
+            <div className="text-[10px] text-dim">
+              {tierLabel(mover.tier)} · {formatCents(mover.previousCents)} →{' '}
+              {formatCents(mover.currentCents)}
+            </div>
+          </div>
+          <div className="shrink-0 text-right">
+            <div
+              className={`tnum text-sm font-semibold ${
+                mover.changeCents > 0 ? 'text-gain' : 'text-loss'
+              }`}
+            >
+              {formatSignedCents(mover.changeCents)}
+            </div>
+            {mover.changeRatio !== null && (
+              <div className="tnum text-[10px] text-dim">{formatPercent(mover.changeRatio)}</div>
+            )}
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }
 

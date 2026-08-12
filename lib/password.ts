@@ -11,7 +11,15 @@ import { env } from '@/lib/env';
  * Kept in its own module (node:crypto) so lib/auth.ts stays runtime-portable.
  */
 export function passwordMatches(candidate: string): boolean {
-  const provided = createHash('sha256').update(candidate, 'utf8').digest();
-  const expected = createHash('sha256').update(env.adminPassword, 'utf8').digest();
-  return timingSafeEqual(provided, expected);
+  return secretMatches(candidate, env.adminPassword);
+}
+
+/**
+ * The same constant-time comparison for any shared secret — used by the cron
+ * route's bearer check, which is a password by another name.
+ */
+export function secretMatches(candidate: string, expected: string): boolean {
+  const a = createHash('sha256').update(candidate, 'utf8').digest();
+  const b = createHash('sha256').update(expected, 'utf8').digest();
+  return timingSafeEqual(a, b);
 }

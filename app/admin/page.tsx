@@ -3,9 +3,13 @@ import { db } from '@/db';
 import { cronRuns } from '@/db/schema';
 import { env } from '@/lib/env';
 import { listPops, summarise } from '@/lib/queries/pops';
+import { listPendingReview } from '@/lib/pricing/refresh';
+import { createProviders, providerStatuses } from '@/lib/pricing/registry';
 import { Panel, Stat } from '@/components/ui';
 import { ImportExport } from '@/components/admin/import-export';
 import { PopTable } from '@/components/admin/pop-table';
+import { RefreshPrices } from '@/components/admin/refresh-prices';
+import { ReviewQueue } from '@/components/admin/review-queue';
 import { LogoutButton } from './logout-button';
 
 export const metadata = { title: 'Admin · Collection' };
@@ -22,6 +26,11 @@ export default async function AdminPage() {
     .from(cronRuns)
     .orderBy(desc(cronRuns.startedAt))
     .limit(1);
+
+  const providers = createProviders();
+  const statuses = providerStatuses(providers);
+  const pricingConfigured = providers.priceCharting.isConfigured();
+  const queued = await listPendingReview();
 
   return (
     <main className="mx-auto w-full max-w-[1400px] flex-1 px-5 py-6">
@@ -59,31 +68,16 @@ export default async function AdminPage() {
           <ImportExport />
         </Panel>
 
-        <Panel title="Providers" description="Pricing sources available to this deployment.">
+        <Panel title="Pricing" description="Sources available to this deployment.">
           <div className="space-y-2 px-4 py-3 text-xs">
-            <ProviderRow
-              name="Manual values"
-              detail={`${counts.withManualValue} of ${counts.total} figures have one`}
-              available
-            />
-            <ProviderRow
-              name="PriceCharting"
-              detail={
-                env.priceChartingToken
-                  ? 'Token configured'
-                  : 'No PRICECHARTING_API_TOKEN — manual values only'
-              }
-              available={Boolean(env.priceChartingToken)}
-            />
-            <ProviderRow
-              name="eBay Browse (asking prices)"
-              detail={
-                env.ebayClientId && env.ebayClientSecret
-                  ? 'Credentials configured'
-                  : 'No eBay credentials — optional cross-check disabled'
-              }
-              available={Boolean(env.ebayClientId && env.ebayClientSecret)}
-            />
+            {statuses.map((status) => (
+              <ProviderRow
+                key={status.id}
+                name={status.label}
+                detail={providerDetail(status.id, status.configured, counts)}
+                available={status.configured}
+              />
+            ))}
             <ProviderRow
               name="Photo uploads"
               detail={env.blobToken ? 'Blob token configured' : 'No BLOB_READ_WRITE_TOKEN'}
@@ -93,20 +87,55 @@ export default async function AdminPage() {
             <div className="mt-3 border-t border-border pt-2 text-[11px] text-dim">
               {lastRun ? (
                 <>
-                  Last price refresh: {new Date(lastRun.startedAt).toLocaleString()} —{' '}
-                  {lastRun.status}, {lastRun.popsProcessed} processed, {lastRun.popsFailed} failed.
+                  Last refresh {new Date(lastRun.startedAt).toLocaleString()} — {lastRun.status},{' '}
+                  {lastRun.popsProcessed} checked, {lastRun.popsFailed} failed.
+                  {lastRun.notes && <span className="block">{lastRun.notes}</span>}
                 </>
               ) : (
-                <>No price refresh has run yet. Pricing arrives in phase 4.</>
+                <>
+                  No refresh has run yet. The cron runs weekly on Vercel; the buttons below run
+                  it now.
+                </>
               )}
             </div>
+          </div>
+
+          <div className="border-t border-border">
+            <RefreshPrices configured={pricingConfigured} />
           </div>
         </Panel>
       </div>
 
+      <Panel
+        className="mb-6"
+        title={`Match review${queued.length > 0 ? ` · ${queued.length}` : ''}`}
+        description="Matches this app would not price on its own. A wrong match writes a wrong price that nothing would ever catch, so these wait for you."
+      >
+        <ReviewQueue pops={queued} />
+      </Panel>
+
       <PopTable pops={pops} />
     </main>
   );
+}
+
+/** Says what each provider's state actually means for the collection. */
+function providerDetail(
+  id: string,
+  configured: boolean,
+  counts: { withManualValue: number; total: number },
+): string {
+  if (id === 'manual') {
+    return `${counts.withManualValue} of ${counts.total} figures have one — always wins`;
+  }
+  if (id === 'pricecharting') {
+    return configured
+      ? 'Token configured — three tiers per figure'
+      : 'No PRICECHARTING_API_TOKEN — manual values only';
+  }
+  return configured
+    ? 'Configured — asking prices only, never a valuation'
+    : 'No eBay credentials — optional cross-check disabled';
 }
 
 function ProviderRow({

@@ -11,5 +11,12 @@ export default defineConfig({
     environment: 'node',
     include: ['**/*.test.ts'],
     exclude: ['node_modules/**', '.next/**'],
+    /*
+     * `db/index.ts` builds its client at module scope, so importing anything
+     * that transitively touches it needs a URL. Pointing at an anonymous
+     * in-memory database rather than local.db means a test can never write to
+     * the development collection, even by accident.
+     */
+    env: { DATABASE_URL: 'file::memory:' },
   },
 });

@@ -137,3 +137,30 @@ export const popBulkUpdateSchema = z
 export type PopBulkUpdateInput = z.infer<typeof popBulkUpdateSchema>;
 
 export const popIdSchema = z.string().min(1, 'A figure id is required.');
+
+/** Body for the collection-wide "refresh prices" button in /admin. */
+export const refreshRequestSchema = z
+  .object({
+    /** Re-price everything, ignoring the six-day staleness rule. */
+    force: z.boolean().default(false),
+    limit: z.number().int().min(1).max(500).optional(),
+  })
+  .strict();
+
+export type RefreshRequestInput = z.infer<typeof refreshRequestSchema>;
+
+/**
+ * Resolving a queued fuzzy match. Confirming carries the chosen catalogue id;
+ * rejecting carries nothing, because "none of these" is the whole message.
+ */
+export const matchDecisionSchema = z.discriminatedUnion('action', [
+  z
+    .object({
+      action: z.literal('confirm'),
+      priceChartingId: z.string().trim().min(1, 'Pick a candidate to confirm.').max(64),
+    })
+    .strict(),
+  z.object({ action: z.literal('reject') }).strict(),
+]);
+
+export type MatchDecisionInput = z.infer<typeof matchDecisionSchema>;

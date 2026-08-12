@@ -8,6 +8,20 @@
       "when": 1786547216716,
       "tag": "0000_new_warpath",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1786566681217,
+      "tag": "0001_regular_omega_sentinel",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1786567593478,
+      "tag": "0002_motionless_stranger",
+      "breakpoints": true
     }
   ]
 }
