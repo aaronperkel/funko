@@ -1,26 +1,82 @@
 @import "tailwindcss";
 
+/*
+ * Dark-first by design, not by preference query. This is an inventory tool —
+ * a trading terminal for plastic figures — so the dark surface is the product,
+ * not a theme option.
+ */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0a0b0d;
+  --surface: #121419;
+  --surface-raised: #181b22;
+  --surface-hover: #1e222b;
+  --border: #262b34;
+  --border-strong: #363c48;
+
+  --foreground: #e9ecf1;
+  --muted: #97a0ae;
+  --dim: #656d7b;
+
+  /* One accent for gains, a distinct one for losses. */
+  --gain: #3ddc97;
+  --gain-dim: #1c6b4c;
+  --loss: #ff6b81;
+  --loss-dim: #7a2637;
+
+  /* Chase figures get gold; exclusives get violet. */
+  --chase: #f2c14e;
+  --exclusive: #a78bfa;
+  --accent: #5b9cff;
+  --warn: #f2a65a;
 }
 
 @theme inline {
   --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-surface-raised: var(--surface-raised);
+  --color-surface-hover: var(--surface-hover);
+  --color-border: var(--border);
+  --color-border-strong: var(--border-strong);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --color-muted: var(--muted);
+  --color-dim: var(--dim);
+  --color-gain: var(--gain);
+  --color-gain-dim: var(--gain-dim);
+  --color-loss: var(--loss);
+  --color-loss-dim: var(--loss-dim);
+  --color-chase: var(--chase);
+  --color-exclusive: var(--exclusive);
+  --color-accent: var(--accent);
+  --color-warn: var(--warn);
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-sans: var(--font-inter);
+  --font-mono: var(--font-jetbrains-mono);
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+}
+
+/*
+ * Every figure in this app is money or a count, so numbers must not shift
+ * width as they change. Applied globally rather than per-component so a
+ * forgotten class can't reintroduce jitter.
+ */
+.tnum,
+table,
+input[type="number"] {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
+}
+
+::selection {
+  background: color-mix(in oklab, var(--accent) 35%, transparent);
+}
+
+/* Dense scrollbars that don't fight the surface. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--border-strong) transparent;
 }
