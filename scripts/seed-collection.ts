@@ -99,11 +99,18 @@ const COLLECTION: ReadonlyArray<Omit<NewPop, 'id'> & { line: string }> = [
   { name: 'Winter Soldier', line: 'Pop! Marvel', franchise: 'Marvel', itemNumber: 813 },
 ];
 
-/** Conservative import defaults — see the note above. */
+/**
+ * Import defaults — see the note above.
+ *
+ * `near_mint` on both, which reads as the `new` tier. Boxes that have sat on a
+ * shelf are near-mint, not damaged; the earlier `minor_damage` default valued
+ * an undamaged collection at "In Dmg Box", which understated it by roughly a
+ * quarter. Correct anything genuinely creased or crushed in the bulk editor.
+ */
 const DEFAULTS = {
   condition: 'near_mint',
   hasBox: true,
-  boxCondition: 'minor_damage',
+  boxCondition: 'near_mint',
   hasProtector: false,
   quantity: 1,
   status: 'owned',

@@ -12,14 +12,14 @@ import {
  * written out by hand rather than derived, so the test is independent of the
  * implementation instead of restating it.
  *
- *                      box: mint         minor_damage    major_damage    none
+ *                      box: mint         near_mint       minor_damage    major_damage    none
  */
 const WITH_BOX: Record<Condition, Record<BoxCondition, ConditionTier>> = {
-  mint:      { mint: 'new',         minor_damage: 'damaged_box', major_damage: 'damaged_box', none: 'loose' },
-  near_mint: { mint: 'new',         minor_damage: 'damaged_box', major_damage: 'damaged_box', none: 'loose' },
-  good:      { mint: 'damaged_box', minor_damage: 'damaged_box', major_damage: 'damaged_box', none: 'loose' },
-  fair:      { mint: 'damaged_box', minor_damage: 'damaged_box', major_damage: 'damaged_box', none: 'loose' },
-  loose:     { mint: 'loose',       minor_damage: 'loose',       major_damage: 'loose',       none: 'loose' },
+  mint:      { mint: 'new',         near_mint: 'new',         minor_damage: 'damaged_box', major_damage: 'damaged_box', none: 'loose' },
+  near_mint: { mint: 'new',         near_mint: 'new',         minor_damage: 'damaged_box', major_damage: 'damaged_box', none: 'loose' },
+  good:      { mint: 'damaged_box', near_mint: 'damaged_box', minor_damage: 'damaged_box', major_damage: 'damaged_box', none: 'loose' },
+  fair:      { mint: 'damaged_box', near_mint: 'damaged_box', minor_damage: 'damaged_box', major_damage: 'damaged_box', none: 'loose' },
+  loose:     { mint: 'loose',       near_mint: 'loose',       minor_damage: 'loose',       major_damage: 'loose',       none: 'loose' },
 };
 
 describe('effectiveTier — full truth table', () => {
@@ -46,7 +46,7 @@ describe('effectiveTier — full truth table', () => {
 });
 
 describe('effectiveTier — stated invariants', () => {
-  it('only a mint/near-mint figure in a MINT box reaches the top tier', () => {
+  it('only an undamaged figure in an undamaged box reaches the top tier', () => {
     const newTierCases = CONDITIONS.flatMap((condition) =>
       BOX_CONDITIONS.map((boxCondition) => ({ condition, boxCondition })),
     ).filter(({ condition, boxCondition }) =>
@@ -55,7 +55,9 @@ describe('effectiveTier — stated invariants', () => {
 
     expect(newTierCases).toEqual([
       { condition: 'mint', boxCondition: 'mint' },
+      { condition: 'mint', boxCondition: 'near_mint' },
       { condition: 'near_mint', boxCondition: 'mint' },
+      { condition: 'near_mint', boxCondition: 'near_mint' },
     ]);
   });
 

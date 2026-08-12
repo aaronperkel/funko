@@ -49,3 +49,6 @@ next-env.d.ts
 
 # Git worktrees created by tooling — full copies of this repo.
 .claude/worktrees/
+
+# One-off pricing baseline, generated for import — not part of the app.
+baseline-prices.csv

@@ -20,9 +20,13 @@ export type TierInput = Pick<Pop, 'condition' | 'hasBox' | 'boxCondition'>;
  *
  * Two deliberate rules:
  *
- * 1. `new` is strict — a mint/near-mint figure in a *mint* box only. A box with
- *    minor damage is still a damaged box, so it reads the middle tier. Ties break
- *    downward: this dashboard should understate rather than flatter.
+ * 1. The top tier needs an undamaged box AND an undamaged figure. `mint` and
+ *    `near_mint` boxes both reach it, because PriceCharting publishes a single
+ *    New Price and the market pays it for any box a buyer would call "new in
+ *    box" — light shelf wear included. `minor_damage` means visible damage
+ *    (creased corner, crushed edge) and drops to the middle tier, which is
+ *    literally labelled "In Dmg Box". Ties still break downward: any doubt
+ *    about the figure itself costs the top tier.
  * 2. `hasProtector` never affects the tier. A protector preserves future
  *    condition; it does not change what the figure is worth today.
  *
@@ -41,8 +45,10 @@ export function effectiveTier(pop: TierInput): ConditionTier {
   // A worn figure can't claim the top tier even inside a pristine box.
   if (pop.condition === 'good' || pop.condition === 'fair') return 'damaged_box';
 
-  // Remaining: condition is mint|near_mint, box is mint|minor_damage.
-  return pop.boxCondition === 'mint' ? 'new' : 'damaged_box';
+  // Remaining: condition is mint|near_mint, box is mint|near_mint|minor_damage.
+  return pop.boxCondition === 'mint' || pop.boxCondition === 'near_mint'
+    ? 'new'
+    : 'damaged_box';
 }
 
 export type TieredPrices = Pick<

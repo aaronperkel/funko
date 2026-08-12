@@ -16,7 +16,26 @@ export const VARIANTS = [
 ] as const;
 
 export const CONDITIONS = ['mint', 'near_mint', 'good', 'fair', 'loose'] as const;
-export const BOX_CONDITIONS = ['mint', 'minor_damage', 'major_damage', 'none'] as const;
+/**
+ * Box grades, best first.
+ *
+ * The split that matters is between `near_mint` and `minor_damage`: everything
+ * above the line is a box a buyer would accept as "new in box", everything
+ * below has visible damage. That is the line PriceCharting's own columns draw
+ * — its middle tier is literally "In Dmg Box" — so it is the line this scale
+ * has to reproduce.
+ *
+ * `mint` vs `near_mint` is descriptive only. Both price identically, because
+ * PriceCharting publishes one New Price and no fourth number exists to map a
+ * near-mint box onto.
+ */
+export const BOX_CONDITIONS = [
+  'mint',
+  'near_mint',
+  'minor_damage',
+  'major_damage',
+  'none',
+] as const;
 export const STATUSES = ['owned', 'wishlist', 'sold'] as const;
 export const ACQUIRED_AS = ['bought', 'gift', 'trade', 'unknown'] as const;
 export const SOURCES = ['pricecharting', 'ebay_active', 'manual'] as const;
