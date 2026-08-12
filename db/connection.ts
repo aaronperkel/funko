@@ -23,8 +23,24 @@ export type DatabaseConnection = {
   authToken: string | undefined;
   isLocalFile: boolean;
   /** Which variable the URL came from, for error messages and logging. */
-  source: 'DATABASE_URL' | 'TURSO_DATABASE_URL';
+  source: string;
 };
+
+/**
+ * URL variables in precedence order.
+ *
+ * `DATABASE_TURSO_*` is what the Turso integration on the Vercel Marketplace
+ * actually injects — the `DATABASE_` prefix is Vercel's, added per storage
+ * integration. The unprefixed `TURSO_*` pair is what Turso's own docs and
+ * quickstarts use, so it is accepted too for a hand-provisioned database.
+ */
+const URL_VARS = ['DATABASE_URL', 'DATABASE_TURSO_DATABASE_URL', 'TURSO_DATABASE_URL'] as const;
+
+const TOKEN_VARS = [
+  'DATABASE_AUTH_TOKEN',
+  'DATABASE_TURSO_AUTH_TOKEN',
+  'TURSO_AUTH_TOKEN',
+] as const;
 
 /**
  * Takes a plain string map rather than `NodeJS.ProcessEnv`: this reads a handful
@@ -34,14 +50,14 @@ export type DatabaseConnection = {
 export function resolveDatabaseConnection(
   env: Record<string, string | undefined> = process.env,
 ): DatabaseConnection {
-  const url = env.DATABASE_URL ?? env.TURSO_DATABASE_URL;
-  const source = env.DATABASE_URL ? 'DATABASE_URL' : 'TURSO_DATABASE_URL';
+  const source = URL_VARS.find((name) => env[name]);
+  const url = source ? env[source] : undefined;
 
-  if (!url) {
+  if (!source || !url) {
     throw new Error(
       'No database URL. Locally, copy .env.example to .env.local and use "file:./local.db". ' +
-        'On Vercel, either add DATABASE_URL in Project Settings → Environment Variables, ' +
-        'or install the Turso integration, which provides TURSO_DATABASE_URL automatically.',
+        'On Vercel, install the Turso integration — it provides DATABASE_TURSO_DATABASE_URL ' +
+        'automatically — or set DATABASE_URL yourself in Project Settings → Environment Variables.',
     );
   }
 
@@ -63,12 +79,13 @@ export function resolveDatabaseConnection(
     );
   }
 
-  const authToken = env.DATABASE_AUTH_TOKEN ?? env.TURSO_AUTH_TOKEN;
+  const tokenVar = TOKEN_VARS.find((name) => env[name]);
+  const authToken = tokenVar ? env[tokenVar] : undefined;
 
   if (!isLocalFile && !authToken) {
     throw new Error(
       `${source} is remote ("${url.split(':')[0]}:") but no auth token is set. ` +
-        'Set DATABASE_AUTH_TOKEN (or TURSO_AUTH_TOKEN).',
+        `Set one of: ${TOKEN_VARS.join(', ')}.`,
     );
   }
 

@@ -31,26 +31,41 @@ describe('resolveDatabaseConnection', () => {
    * and TURSO_AUTH_TOKEN. Reading only DATABASE_URL would mean a correctly
    * provisioned database still failed at runtime with "not set".
    */
-  it('accepts the names the Turso Vercel integration injects', () => {
+  /*
+   * What the Turso integration on the Vercel Marketplace actually injects. The
+   * DATABASE_ prefix is Vercel's, added per storage integration — reading only
+   * the names in Turso's own docs would miss it, and a correctly provisioned
+   * database would still report "no database URL".
+   */
+  it('accepts the prefixed names the Vercel Turso integration injects', () => {
     expect(
       resolveDatabaseConnection({
-        TURSO_DATABASE_URL: 'libsql://funko.turso.io',
-        TURSO_AUTH_TOKEN: 'injected',
+        DATABASE_TURSO_DATABASE_URL: 'libsql://funko.turso.io',
+        DATABASE_TURSO_AUTH_TOKEN: 'injected',
       }),
     ).toEqual({
       url: 'libsql://funko.turso.io',
       authToken: 'injected',
       isLocalFile: false,
-      source: 'TURSO_DATABASE_URL',
+      source: 'DATABASE_TURSO_DATABASE_URL',
     });
+  });
+
+  it('also accepts the unprefixed names from Turso’s own docs', () => {
+    expect(
+      resolveDatabaseConnection({
+        TURSO_DATABASE_URL: 'libsql://funko.turso.io',
+        TURSO_AUTH_TOKEN: 'injected',
+      }),
+    ).toMatchObject({ url: 'libsql://funko.turso.io', authToken: 'injected' });
   });
 
   it('lets an explicit override beat an injected default', () => {
     const resolved = resolveDatabaseConnection({
       DATABASE_URL: 'libsql://explicit.turso.io',
       DATABASE_AUTH_TOKEN: 'explicit',
-      TURSO_DATABASE_URL: 'libsql://injected.turso.io',
-      TURSO_AUTH_TOKEN: 'injected',
+      DATABASE_TURSO_DATABASE_URL: 'libsql://injected.turso.io',
+      DATABASE_TURSO_AUTH_TOKEN: 'injected',
     });
     expect(resolved.url).toBe('libsql://explicit.turso.io');
     expect(resolved.authToken).toBe('explicit');
@@ -59,14 +74,14 @@ describe('resolveDatabaseConnection', () => {
   it('mixes conventions rather than failing on a half-match', () => {
     const resolved = resolveDatabaseConnection({
       DATABASE_URL: 'libsql://funko.turso.io',
-      TURSO_AUTH_TOKEN: 'injected',
+      DATABASE_TURSO_AUTH_TOKEN: 'injected',
     });
     expect(resolved.authToken).toBe('injected');
   });
 
   it('names both options when nothing is configured', () => {
     expect(() => resolveDatabaseConnection({})).toThrow(/DATABASE_URL/);
-    expect(() => resolveDatabaseConnection({})).toThrow(/Turso integration/);
+    expect(() => resolveDatabaseConnection({})).toThrow(/DATABASE_TURSO_DATABASE_URL/);
   });
 
   it('refuses a remote database with no auth token', () => {
@@ -88,15 +103,15 @@ describe('resolveDatabaseConnection', () => {
   it('says how to fix it rather than just that it is wrong', () => {
     expect(() =>
       resolveDatabaseConnection({ DATABASE_URL: 'file:./local.db', VERCEL: '1' }),
-    ).toThrow(/TURSO_DATABASE_URL/);
+    ).toThrow(/Turso/);
   });
 
   it('catches a leftover file: URL shadowing a provisioned Turso database', () => {
     expect(() =>
       resolveDatabaseConnection({
         DATABASE_URL: 'file:./local.db',
-        TURSO_DATABASE_URL: 'libsql://funko.turso.io',
-        TURSO_AUTH_TOKEN: 'injected',
+        DATABASE_TURSO_DATABASE_URL: 'libsql://funko.turso.io',
+        DATABASE_TURSO_AUTH_TOKEN: 'injected',
         VERCEL: '1',
       }),
     ).toThrow(/local file/i);
