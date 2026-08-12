@@ -7,6 +7,7 @@ import {
   STATUSES,
   VARIANTS,
 } from '@/db/schema';
+import { normaliseUpc } from '@/lib/upc';
 
 /**
  * Every API input is validated here. Form fields arrive as empty strings when
@@ -45,16 +46,29 @@ const nullableUrl = z
   .nullish()
   .transform((value) => (value == null || value === '' ? null : value));
 
-/** UPCs are 8–14 digits (UPC-E through GTIN-14). Punctuation is stripped. */
+/**
+ * UPCs are checksum-validated, not merely length-checked.
+ *
+ * A mistyped UPC does not fail — it resolves to a *different product* and
+ * writes a confident wrong price. The check digit catches most single-digit
+ * typos and transpositions before they ever reach the pricing API, and the
+ * normaliser restores leading zeros that a spreadsheet round-trip strips.
+ */
 const nullableUpc = z
   .string()
   .trim()
-  .transform((value) => value.replace(/[\s-]/g, ''))
-  .refine((value) => value === '' || /^\d{8,14}$/.test(value), {
-    message: 'A UPC is 8 to 14 digits.',
-  })
   .nullish()
-  .transform((value) => (value == null || value === '' ? null : value));
+  .transform((value) => (value == null || value.trim() === '' ? null : value.trim()))
+  .superRefine((value, ctx) => {
+    if (value === null) return;
+    const result = normaliseUpc(value);
+    if (!result.ok) ctx.addIssue({ code: 'custom', message: result.error });
+  })
+  .transform((value) => {
+    if (value === null) return null;
+    const result = normaliseUpc(value);
+    return result.ok ? result.upc : null;
+  });
 
 const popFields = {
   name: z.string().trim().min(1, 'Name is required.').max(200),

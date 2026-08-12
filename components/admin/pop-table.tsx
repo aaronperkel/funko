@@ -13,6 +13,7 @@ import {
 } from '@/db/schema';
 import { effectiveTier, tierLabel } from '@/lib/condition';
 import { apiFetch } from '@/lib/client-api';
+import { looksLikeFunkoUpc, normaliseUpc } from '@/lib/upc';
 import { formatCents } from '@/lib/money';
 import { Badge } from '@/components/ui';
 import { PopForm } from './pop-form';
@@ -152,6 +153,7 @@ export function PopTable({ pops }: { pops: Pop[] }) {
               </th>
               <th className="px-2 py-2 font-medium">Figure</th>
               <th className="px-2 py-2 font-medium">#</th>
+              <th className="px-2 py-2 font-medium">UPC</th>
               <th className="px-2 py-2 font-medium">Condition</th>
               <th className="px-2 py-2 font-medium">Box</th>
               <th className="px-2 py-2 text-center font-medium">Boxed</th>
@@ -163,7 +165,7 @@ export function PopTable({ pops }: { pops: Pop[] }) {
             </tr>
           </thead>
           <tbody>
-            {visible.map((pop) => {
+            {visible.map((pop, rowIndex) => {
               const tier = effectiveTier(pop);
               const busy = busyIds.has(pop.id);
 
@@ -204,6 +206,17 @@ export function PopTable({ pops }: { pops: Pop[] }) {
                   </td>
 
                   <td className="tnum px-2 py-1.5 text-muted">{pop.itemNumber ?? '—'}</td>
+
+                  <td className="px-2 py-1.5">
+                    <UpcCell
+                      key={pop.upc ?? 'empty'}
+                      rowIndex={rowIndex}
+                      upc={pop.upc}
+                      disabled={busy}
+                      label={pop.name}
+                      onSave={(value) => patchOne(pop.id, { upc: value })}
+                    />
+                  </td>
 
                   <td className="px-2 py-1.5">
                     <InlineSelect
@@ -313,6 +326,102 @@ export function PopTable({ pops }: { pops: Pop[] }) {
 function TierPill({ tier }: { tier: ReturnType<typeof effectiveTier> }) {
   const tone = tier === 'new' ? 'gain' : tier === 'damaged_box' ? 'neutral' : 'warn';
   return <Badge tone={tone}>{tierLabel(tier)}</Badge>;
+}
+
+/**
+ * Inline UPC entry, built for filling in a whole shelf in one sitting.
+ *
+ * Validation happens here, before the request: a mistyped barcode is caught by
+ * its own check digit and never leaves the browser, so a typo costs you a red
+ * outline rather than a wrong price. Enter commits and jumps to the next row,
+ * which is what makes 23 of these bearable.
+ */
+function UpcCell({
+  rowIndex,
+  upc,
+  disabled,
+  label,
+  onSave,
+}: {
+  rowIndex: number;
+  upc: string | null;
+  disabled: boolean;
+  label: string;
+  onSave: (value: string | null) => void | Promise<void>;
+}) {
+  const [value, setValue] = useState(upc ?? '');
+  const [error, setError] = useState<string | null>(null);
+
+  function commit(): boolean {
+    const trimmed = value.trim();
+
+    if (trimmed === (upc ?? '')) {
+      setError(null);
+      return true;
+    }
+
+    if (trimmed === '') {
+      setError(null);
+      void onSave(null);
+      return true;
+    }
+
+    const result = normaliseUpc(trimmed);
+    if (!result.ok) {
+      setError(result.error);
+      return false;
+    }
+
+    // Show the normalised form, so a restored leading zero is visible.
+    setValue(result.upc);
+    setError(null);
+    void onSave(result.upc);
+    return true;
+  }
+
+  const suspicious = upc !== null && !looksLikeFunkoUpc(upc);
+
+  return (
+    <div className="min-w-[9.5rem]">
+      <input
+        value={value}
+        disabled={disabled}
+        inputMode="numeric"
+        autoComplete="off"
+        placeholder="scan or type"
+        aria-label={`UPC for ${label}`}
+        aria-invalid={error !== null}
+        data-upc-index={rowIndex}
+        onChange={(event) => {
+          setValue(event.target.value);
+          if (error) setError(null);
+        }}
+        onBlur={commit}
+        onKeyDown={(event) => {
+          if (event.key !== 'Enter') return;
+          event.preventDefault();
+          if (!commit()) return;
+          const next = document.querySelector<HTMLInputElement>(
+            `[data-upc-index="${rowIndex + 1}"]`,
+          );
+          next?.focus();
+          next?.select();
+        }}
+        className={`tnum w-full rounded border bg-surface-raised px-1.5 py-1 text-xs outline-none placeholder:text-dim focus:border-accent ${
+          error ? 'border-loss text-loss' : 'border-border text-foreground'
+        }`}
+      />
+      {error ? (
+        <p className="mt-0.5 text-[10px] text-loss">{error}</p>
+      ) : (
+        suspicious && (
+          <p className="mt-0.5 text-[10px] text-warn" title="Funko barcodes normally start 889698">
+            unusual prefix
+          </p>
+        )
+      )}
+    </div>
+  );
 }
 
 function InlineSelect({

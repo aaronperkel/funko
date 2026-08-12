@@ -10,7 +10,11 @@ export default defineConfig({
   test: {
     environment: 'node',
     include: ['**/*.test.ts'],
-    exclude: ['node_modules/**', '.next/**'],
+    /*
+     * `.claude/**` holds git worktrees — full copies of this repo. Without it
+     * every suite runs twice and the totals silently double.
+     */
+    exclude: ['node_modules/**', '.next/**', '.claude/**', '**/node_modules/**'],
     /*
      * `db/index.ts` builds its client at module scope, so importing anything
      * that transitively touches it needs a URL. Pointing at an anonymous

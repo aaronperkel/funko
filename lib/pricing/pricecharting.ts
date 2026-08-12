@@ -10,6 +10,7 @@ import {
   type QuotableFields,
   type Quote,
 } from '@/lib/pricing/provider';
+import { normaliseUpc } from '@/lib/upc';
 
 /**
  * PriceCharting — the primary source.
@@ -52,6 +53,7 @@ type ProductPayload = {
   'new-price'?: unknown;
   'sales-volume'?: unknown;
   epid?: unknown;
+  upc?: unknown;
 };
 
 type SearchPayload = {
@@ -131,6 +133,7 @@ export class PriceChartingProvider implements PriceProvider {
           priceChartingId: null,
           priceChartingConsole: product.console,
           ebayEpid: null,
+          upc: null,
           candidates: [{ id: product.id, name: product.name, console: product.console }],
           note: `Stored product id resolves to "${product.console}", which is not a Funko listing. Re-match this figure.`,
         },
@@ -155,6 +158,7 @@ export class PriceChartingProvider implements PriceProvider {
         priceChartingId: product.id,
         priceChartingConsole: product.console,
         ebayEpid: product.epid,
+        upc: product.upc,
         candidates: null,
         note: `Priced via ${via}.`,
       },
@@ -175,6 +179,7 @@ export class PriceChartingProvider implements PriceProvider {
             priceChartingId: null,
             priceChartingConsole: null,
             ebayEpid: null,
+            upc: null,
             candidates: null,
             note: `UPC ${upc} matched nothing in PriceCharting. Check the digits.`,
           },
@@ -198,6 +203,7 @@ export class PriceChartingProvider implements PriceProvider {
           priceChartingId: null,
           priceChartingConsole: product.console,
           ebayEpid: null,
+          upc: null,
           candidates: [{ id: product.id, name: product.name, console: product.console }],
           note: `UPC ${upc} matched "${product.name}" in "${product.console}" — not a Funko listing. The UPC is probably wrong.`,
         },
@@ -212,6 +218,7 @@ export class PriceChartingProvider implements PriceProvider {
         priceChartingId: product.id,
         priceChartingConsole: product.console,
         ebayEpid: product.epid,
+        upc: product.upc,
         candidates: null,
         note: `Matched by UPC ${upc}.`,
       },
@@ -248,6 +255,7 @@ export class PriceChartingProvider implements PriceProvider {
           priceChartingId: null,
           priceChartingConsole: null,
           ebayEpid: null,
+          upc: null,
           candidates: null,
           note: `No Funko listing found for "${query}". Add a UPC, or set a search override.`,
         },
@@ -262,6 +270,7 @@ export class PriceChartingProvider implements PriceProvider {
         priceChartingId: null,
         priceChartingConsole: null,
         ebayEpid: null,
+        upc: null,
         candidates: candidates.slice(0, MAX_CANDIDATES),
         note: `${candidates.length} Funko ${candidates.length === 1 ? 'listing' : 'listings'} matched "${query}". Confirm one before it is priced.`,
       },
@@ -311,6 +320,7 @@ export class PriceChartingProvider implements PriceProvider {
         cib: penniesOrNull(payload['cib-price']),
         newPrice: penniesOrNull(payload['new-price']),
         salesVolumeYearly: asPositiveInt(payload['sales-volume']),
+        upc: parseCatalogueUpc(payload.upc),
         raw: payload,
       },
     };
@@ -348,6 +358,7 @@ type ParsedProduct = {
   cib: number | null;
   newPrice: number | null;
   salesVolumeYearly: number | null;
+  upc: string | null;
   raw: unknown;
 };
 
@@ -406,6 +417,19 @@ function asNonEmptyString(value: unknown): string | null {
   if (typeof value === 'string') return value.trim() === '' ? null : value.trim();
   if (typeof value === 'number' && Number.isFinite(value)) return String(value);
   return null;
+}
+
+/**
+ * PriceCharting carries a UPC for most modern products, which lets a confirmed
+ * match backfill the barcode rather than making you read one off a box. It is
+ * still put through the same checksum as a hand-typed one — a catalogue is not
+ * a reason to skip validation.
+ */
+function parseCatalogueUpc(value: unknown): string | null {
+  const raw = asNonEmptyString(value);
+  if (raw === null) return null;
+  const result = normaliseUpc(raw);
+  return result.ok ? result.upc : null;
 }
 
 function asPositiveInt(value: unknown): number | null {

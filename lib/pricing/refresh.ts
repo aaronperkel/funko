@@ -144,7 +144,7 @@ export async function refreshOnePop(
     tone = result.retryable ? 'warn' : 'error';
   } else {
     if (result.match) {
-      await applyMatch(pop.id, result.match);
+      await applyMatch(pop, result.match);
       matchStatus = result.match.status;
     }
 
@@ -309,10 +309,16 @@ export async function loadRefreshCandidates(): Promise<RefreshCandidate[]> {
  * The provider is the authority here, so nulls overwrite: when a stored id
  * turns out to point at a video game, clearing it is the whole point.
  */
-async function applyMatch(popId: string, match: MatchEvidence): Promise<void> {
+async function applyMatch(pop: Pop, match: MatchEvidence): Promise<void> {
   await db
     .update(pops)
     .set({
+      /*
+       * The one field the provider is NOT the authority on. A UPC read off the
+       * box in your hand beats a catalogue entry, so this only ever fills a
+       * blank — it never overwrites what you typed.
+       */
+      ...(pop.upc === null && match.upc !== null ? { upc: match.upc } : {}),
       matchStatus: match.status,
       priceChartingId: match.priceChartingId,
       priceChartingConsole: match.priceChartingConsole,
@@ -320,7 +326,7 @@ async function applyMatch(popId: string, match: MatchEvidence): Promise<void> {
       matchCandidates: match.candidates ? JSON.stringify(match.candidates) : null,
       matchNote: match.note,
     })
-    .where(eq(pops.id, popId));
+    .where(eq(pops.id, pop.id));
 }
 
 async function writeSnapshot(popId: string, quote: Quote): Promise<void> {

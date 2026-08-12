@@ -59,6 +59,11 @@ export type MatchEvidence = {
   priceChartingId: string | null;
   priceChartingConsole: string | null;
   ebayEpid: string | null;
+  /**
+   * The UPC the catalogue holds for this product, when it has one. Lets a
+   * confirmed match backfill the barcode instead of you reading it off a box.
+   */
+  upc: string | null;
   candidates: MatchCandidate[] | null;
   /** Human-readable reason, surfaced in the admin review queue. */
   note: string;
