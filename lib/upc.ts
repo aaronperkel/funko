@@ -85,13 +85,26 @@ export function hasValidCheckDigit(digits: string): boolean {
 }
 
 /**
- * Funko's GS1 company prefix. Not a validation rule — Funko has used other
- * prefixes over the years and exclusives are sometimes barcoded by the
- * retailer — but a Funko UPC that does not start with this is worth a second
- * look before it goes anywhere near the pricing API.
+ * Funko's GS1 company prefixes.
+ *
+ * `889698` covers modern Pops, but the early line used two others, verified
+ * against real catalogue entries rather than assumed:
+ *
+ *   830395023908  Darth Maul #9      (January 2011)
+ *   849803068271  Darth Vader #1     (January 2011)
+ *   849803055400  Yoda #2            (May 2011)
+ *
+ * Checking only the modern prefix cried wolf on every pre-2017 figure, which
+ * is the fastest way to teach someone to ignore a warning.
+ *
+ * Still not a validation rule — retailers sometimes barcode exclusives
+ * themselves — just a nudge to look twice before a UPC reaches the pricing API.
  */
-export const FUNKO_PREFIX = '889698';
+export const FUNKO_PREFIXES = ['889698', '849803', '830395'] as const;
+
+/** The current prefix, used when a single example is wanted. */
+export const FUNKO_PREFIX = FUNKO_PREFIXES[0];
 
 export function looksLikeFunkoUpc(upc: string): boolean {
-  return upc.startsWith(FUNKO_PREFIX);
+  return FUNKO_PREFIXES.some((prefix) => upc.startsWith(prefix));
 }

@@ -91,9 +91,37 @@ describe('normaliseUpc', () => {
   });
 });
 
+/**
+ * Real early-line barcodes, read off PriceCharting's catalogue entries. The
+ * 2011 Pops predate the 889698 prefix entirely.
+ */
+const EARLY_FUNKO_UPCS = [
+  '830395023908', // Darth Maul #9, January 2011
+  '849803068271', // Darth Vader #1, January 2011
+  '849803055400', // Yoda #2, May 2011
+];
+
+describe('early-line barcodes', () => {
+  it('validates by checksum like any other', () => {
+    for (const upc of EARLY_FUNKO_UPCS) {
+      expect(hasValidCheckDigit(upc)).toBe(true);
+      expect(normaliseUpc(upc).ok).toBe(true);
+    }
+  });
+});
+
 describe('looksLikeFunkoUpc', () => {
   it('recognises the prefix Funko actually uses', () => {
     for (const upc of REAL_FUNKO_UPCS) {
+      expect(looksLikeFunkoUpc(upc)).toBe(true);
+    }
+  });
+
+  /*
+   * Flagging every 2011 figure as suspicious is how a warning gets ignored.
+   */
+  it('does not cry wolf on the pre-2017 prefixes', () => {
+    for (const upc of EARLY_FUNKO_UPCS) {
       expect(looksLikeFunkoUpc(upc)).toBe(true);
     }
   });
