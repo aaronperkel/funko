@@ -1,5 +1,5 @@
 import { desc, eq, sql } from 'drizzle-orm';
-import { db } from '@/db';
+import { getDb } from '@/db';
 import { pops, priceSnapshots, type Pop, type PriceSnapshot } from '@/db/schema';
 import { effectiveTier, priceForTier, type ConditionTier } from '@/lib/condition';
 import { valuePop, type Valuation } from '@/lib/valuation';
@@ -128,8 +128,8 @@ export type PrivateCollectionEntry = CollectionEntry & { pop: PrivatePop };
  * any size costs one query rather than N.
  */
 async function latestSnapshotsByPop(): Promise<Map<string, PriceSnapshot>> {
-  const ranked = db.$with('ranked').as(
-    db
+  const ranked = getDb().$with('ranked').as(
+    getDb()
       .select({
         id: priceSnapshots.id,
         popId: priceSnapshots.popId,
@@ -151,7 +151,7 @@ async function latestSnapshotsByPop(): Promise<Map<string, PriceSnapshot>> {
       .where(eq(priceSnapshots.source, 'pricecharting')),
   );
 
-  const rows = await db
+  const rows = await getDb()
     .with(ranked)
     .select()
     .from(ranked)
@@ -181,10 +181,10 @@ export async function getCollection(options: {
 }): Promise<CollectionEntry[]> {
   const [rows, snapshots] = await Promise.all([
     options.includePrivate
-      ? (db.select(privateColumns).from(pops).orderBy(desc(pops.createdAt)) as Promise<
+      ? (getDb().select(privateColumns).from(pops).orderBy(desc(pops.createdAt)) as Promise<
           Array<PublicPop | PrivatePop>
         >)
-      : (db.select(publicColumns).from(pops).orderBy(desc(pops.createdAt)) as Promise<
+      : (getDb().select(publicColumns).from(pops).orderBy(desc(pops.createdAt)) as Promise<
           Array<PublicPop | PrivatePop>
         >),
     latestSnapshotsByPop(),
@@ -201,14 +201,14 @@ export async function getPopEntry(
   options: { includePrivate: boolean },
 ): Promise<{ entry: CollectionEntry; snapshots: PriceSnapshot[] } | null> {
   const rows: Array<PublicPop | PrivatePop> = options.includePrivate
-    ? await db.select(privateColumns).from(pops).where(eq(pops.id, id)).limit(1)
-    : await db.select(publicColumns).from(pops).where(eq(pops.id, id)).limit(1);
+    ? await getDb().select(privateColumns).from(pops).where(eq(pops.id, id)).limit(1)
+    : await getDb().select(publicColumns).from(pops).where(eq(pops.id, id)).limit(1);
 
   const [row] = rows;
 
   if (!row) return null;
 
-  const history = await db
+  const history = await getDb()
     .select()
     .from(priceSnapshots)
     .where(eq(priceSnapshots.popId, id))
@@ -292,7 +292,7 @@ export async function getValueHistory(): Promise<
   Array<{ date: string; valueCents: number; pricedCount: number }>
 > {
   const [allPops, snapshots] = await Promise.all([
-    db
+    getDb()
       .select({
         id: pops.id,
         quantity: pops.quantity,
@@ -303,7 +303,7 @@ export async function getValueHistory(): Promise<
         status: pops.status,
       })
       .from(pops),
-    db
+    getDb()
       .select()
       .from(priceSnapshots)
       .where(eq(priceSnapshots.source, 'pricecharting'))
@@ -373,7 +373,7 @@ export type Mover = {
  */
 export async function getBiggestMovers(limit = 6): Promise<Mover[]> {
   const [allPops, snapshots] = await Promise.all([
-    db
+    getDb()
       .select({
         id: pops.id,
         name: pops.name,
@@ -387,7 +387,7 @@ export async function getBiggestMovers(limit = 6): Promise<Mover[]> {
       })
       .from(pops)
       .where(eq(pops.status, 'owned')),
-    db
+    getDb()
       .select()
       .from(priceSnapshots)
       .where(eq(priceSnapshots.source, 'pricecharting'))

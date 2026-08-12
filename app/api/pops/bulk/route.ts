@@ -1,5 +1,5 @@
 import { inArray } from 'drizzle-orm';
-import { db } from '@/db';
+import { getDb } from '@/db';
 import { pops } from '@/db/schema';
 import { jsonOk, parseJsonBody, withErrorHandling } from '@/lib/api';
 import { popBulkUpdateSchema } from '@/lib/validation';
@@ -15,7 +15,7 @@ export async function PATCH(request: Request) {
 
     const { ids, patch } = body.data;
 
-    const updated = await db
+    const updated = await getDb()
       .update(pops)
       .set(patch)
       .where(inArray(pops.id, ids))

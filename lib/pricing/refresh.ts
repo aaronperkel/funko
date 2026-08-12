@@ -1,5 +1,5 @@
 import { eq, max, sql } from 'drizzle-orm';
-import { db } from '@/db';
+import { getDb } from '@/db';
 import {
   cronRuns,
   pops,
@@ -228,7 +228,7 @@ export async function refreshPops(options: RefreshRunOptions): Promise<RefreshRu
     if (index > 0 && delayMs > 0) await sleep(delayMs);
 
     try {
-      const row = await db.select().from(pops).where(eq(pops.id, candidate.id)).limit(1);
+      const row = await getDb().select().from(pops).where(eq(pops.id, candidate.id)).limit(1);
       const pop = row[0];
       if (!pop) continue;
 
@@ -277,7 +277,7 @@ export async function refreshPops(options: RefreshRunOptions): Promise<RefreshRu
 
 /** Every figure plus the age of its newest PriceCharting snapshot, in one query. */
 export async function loadRefreshCandidates(): Promise<RefreshCandidate[]> {
-  const latest = db
+  const latest = getDb()
     .select({
       popId: priceSnapshots.popId,
       lastPricedAt: max(priceSnapshots.capturedAt).as('last_priced_at'),
@@ -287,7 +287,7 @@ export async function loadRefreshCandidates(): Promise<RefreshCandidate[]> {
     .groupBy(priceSnapshots.popId)
     .as('latest');
 
-  const rows = await db
+  const rows = await getDb()
     .select({
       id: pops.id,
       name: pops.name,
@@ -310,7 +310,7 @@ export async function loadRefreshCandidates(): Promise<RefreshCandidate[]> {
  * turns out to point at a video game, clearing it is the whole point.
  */
 async function applyMatch(pop: Pop, match: MatchEvidence): Promise<void> {
-  await db
+  await getDb()
     .update(pops)
     .set({
       /*
@@ -346,11 +346,11 @@ async function writeSnapshot(popId: string, quote: Quote): Promise<void> {
     rawJson: JSON.stringify({ sample: quote.sample ?? null, raw: quote.raw ?? null }),
   };
 
-  await db.insert(priceSnapshots).values(row);
+  await getDb().insert(priceSnapshots).values(row);
 }
 
 async function startRun(): Promise<string> {
-  const [run] = await db
+  const [run] = await getDb()
     .insert(cronRuns)
     .values({ startedAt: new Date().toISOString(), status: 'running' })
     .returning({ id: cronRuns.id });
@@ -361,7 +361,7 @@ async function finishRun(
   runId: string,
   update: { status: 'completed' | 'partial' | 'failed'; processed: number; failed: number; notes: string },
 ): Promise<void> {
-  await db
+  await getDb()
     .update(cronRuns)
     .set({
       finishedAt: new Date().toISOString(),
@@ -400,7 +400,7 @@ function sleep(ms: number): Promise<void> {
  * Count of figures waiting on a human decision — the review-queue badge.
  */
 export async function countPendingReview(): Promise<number> {
-  const [row] = await db
+  const [row] = await getDb()
     .select({ count: sql<number>`count(*)` })
     .from(pops)
     .where(eq(pops.matchStatus, 'pending_review'));
@@ -408,7 +408,7 @@ export async function countPendingReview(): Promise<number> {
 }
 
 export async function listPendingReview(): Promise<Pop[]> {
-  return db.select().from(pops).where(eq(pops.matchStatus, 'pending_review'));
+  return getDb().select().from(pops).where(eq(pops.matchStatus, 'pending_review'));
 }
 
 /**

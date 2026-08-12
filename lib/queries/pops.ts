@@ -1,5 +1,5 @@
 import { asc, desc, eq } from 'drizzle-orm';
-import { db } from '@/db';
+import { getDb } from '@/db';
 import { pops, type Pop } from '@/db/schema';
 
 /**
@@ -8,15 +8,15 @@ import { pops, type Pop } from '@/db/schema';
  */
 
 export async function listPops(): Promise<Pop[]> {
-  return db.select().from(pops).orderBy(asc(pops.name));
+  return getDb().select().from(pops).orderBy(asc(pops.name));
 }
 
 export async function listPopsNewestFirst(): Promise<Pop[]> {
-  return db.select().from(pops).orderBy(desc(pops.createdAt));
+  return getDb().select().from(pops).orderBy(desc(pops.createdAt));
 }
 
 export async function getPopById(id: string): Promise<Pop | null> {
-  const rows = await db.select().from(pops).where(eq(pops.id, id)).limit(1);
+  const rows = await getDb().select().from(pops).where(eq(pops.id, id)).limit(1);
   return rows[0] ?? null;
 }
 

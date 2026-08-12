@@ -21,35 +21,29 @@ export type Db = ReturnType<typeof createDb>;
 
 let instance: Db | null = null;
 
-function getDb(): Db {
+/**
+ * Connects on first use, not on import.
+ *
+ * `next build` imports every route module to collect its configuration, so a
+ * client created at module scope turns a missing environment variable into a
+ * build failure reported against an unrelated route — which is exactly how
+ * this first broke in production. `lib/env.ts` is lazy for the same reason;
+ * this file was the one place that wasn't.
+ *
+ * Deliberately a function rather than a `Proxy`-wrapped `db` constant. The
+ * proxy version reads more nicely at call sites, but it intercepts property
+ * introspection, which silently breaks any library that inspects the client
+ * (adapter-style integrations check for method existence and iterate
+ * properties). Nothing here does that today; a plain function means nothing
+ * added later can trip over it either.
+ *
+ * The trade-off of laziness is deliberate: a missing DATABASE_URL surfaces as
+ * a clear error on the first request that needs the database, rather than at
+ * build time — matching how every other required variable already behaves.
+ */
+export function getDb(): Db {
   instance ??= createDb();
   return instance;
 }
-
-/**
- * Connected on first use, not on import.
- *
- * `next build` imports every route module to collect its configuration, so
- * anything that connects at module scope turns a missing environment variable
- * into a build failure reported against an unrelated route — which is exactly
- * how this first broke. `lib/env.ts` is lazy for the same reason; this file was
- * the one place that wasn't, and the inconsistency was the bug.
- *
- * The trade-off is deliberate: a missing DATABASE_URL now surfaces as a clear
- * error on the first request that needs the database, rather than at build
- * time, which is how every other required variable in this app already behaves.
- */
-export const db = new Proxy({} as Db, {
-  get(_target, property) {
-    const real = getDb();
-    // `receiver` is the real instance, not the proxy, so drizzle's internal
-    // `this` and any prototype getters resolve against the actual client.
-    const value = Reflect.get(real, property, real);
-    return typeof value === 'function' ? value.bind(real) : value;
-  },
-  has(_target, property) {
-    return Reflect.has(getDb(), property);
-  },
-});
 
 export * from './schema';

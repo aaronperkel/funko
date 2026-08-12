@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { db } from '@/db';
+import { getDb } from '@/db';
 import { pops } from '@/db/schema';
 import { jsonError, jsonOk, withErrorHandling } from '@/lib/api';
 import { flattenZodError } from '@/lib/api';
@@ -56,7 +56,7 @@ export async function POST(request: Request) {
       }
 
       if (mapped.id) {
-        const existing = await db
+        const existing = await getDb()
           .select({ id: pops.id })
           .from(pops)
           .where(eq(pops.id, mapped.id))
@@ -89,7 +89,7 @@ export async function POST(request: Request) {
           continue;
         }
 
-        const [row] = await db
+        const [row] = await getDb()
           .update(pops)
           .set(parsed.data)
           .where(eq(pops.id, mapped.id))
@@ -111,7 +111,7 @@ export async function POST(request: Request) {
         continue;
       }
 
-      const [row] = await db
+      const [row] = await getDb()
         .insert(pops)
         .values(parsed.data)
         .returning({ id: pops.id, name: pops.name });

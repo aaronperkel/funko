@@ -1,4 +1,4 @@
-import { db } from '@/db';
+import { getDb } from '@/db';
 import { pops } from '@/db/schema';
 import { jsonOk, parseJsonBody, withErrorHandling } from '@/lib/api';
 import { listPops } from '@/lib/queries/pops';
@@ -16,7 +16,7 @@ export async function POST(request: Request) {
     const body = await parseJsonBody(request, popCreateSchema);
     if (!body.ok) return body.response;
 
-    const [created] = await db.insert(pops).values(body.data).returning();
+    const [created] = await getDb().insert(pops).values(body.data).returning();
     return jsonOk({ pop: created }, 201);
   });
 }

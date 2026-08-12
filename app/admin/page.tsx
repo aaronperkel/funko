@@ -1,5 +1,5 @@
 import { desc } from 'drizzle-orm';
-import { db } from '@/db';
+import { getDb } from '@/db';
 import { cronRuns } from '@/db/schema';
 import { env } from '@/lib/env';
 import { listPops, summarise } from '@/lib/queries/pops';
@@ -21,7 +21,7 @@ export default async function AdminPage() {
   const pops = await listPops();
   const counts = summarise(pops);
 
-  const [lastRun] = await db
+  const [lastRun] = await getDb()
     .select()
     .from(cronRuns)
     .orderBy(desc(cronRuns.startedAt))

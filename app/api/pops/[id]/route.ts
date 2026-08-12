@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { db } from '@/db';
+import { getDb } from '@/db';
 import { pops } from '@/db/schema';
 import { jsonError, jsonOk, parseJsonBody, withErrorHandling } from '@/lib/api';
 import { getPopById } from '@/lib/queries/pops';
@@ -31,7 +31,7 @@ export async function PATCH(request: Request, { params }: Context) {
     const existing = await getPopById(id);
     if (!existing) return jsonError('Figure not found.', 404);
 
-    const [updated] = await db
+    const [updated] = await getDb()
       .update(pops)
       .set(body.data)
       .where(eq(pops.id, id))
@@ -49,7 +49,7 @@ export async function DELETE(_request: Request, { params }: Context) {
     if (!existing) return jsonError('Figure not found.', 404);
 
     // price_snapshots cascade via the FK.
-    await db.delete(pops).where(eq(pops.id, id));
+    await getDb().delete(pops).where(eq(pops.id, id));
     return jsonOk({ ok: true, deletedId: id });
   });
 }

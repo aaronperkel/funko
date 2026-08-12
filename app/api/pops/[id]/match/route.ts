@@ -1,5 +1,5 @@
 import { eq } from 'drizzle-orm';
-import { db } from '@/db';
+import { getDb } from '@/db';
 import { pops } from '@/db/schema';
 import { isAuthenticated } from '@/lib/auth';
 import { jsonError, jsonOk, parseJsonBody, withErrorHandling } from '@/lib/api';
@@ -39,7 +39,7 @@ export async function POST(request: Request, { params }: Context) {
        * unidentified — re-running the same search would only re-queue the same
        * wrong candidates. Adding a UPC brings them straight back in.
        */
-      await db
+      await getDb()
         .update(pops)
         .set({
           matchStatus: 'rejected',
@@ -57,7 +57,7 @@ export async function POST(request: Request, { params }: Context) {
       });
     }
 
-    await db
+    await getDb()
       .update(pops)
       .set({
         matchStatus: 'confirmed',
